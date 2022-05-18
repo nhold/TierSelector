@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using BepInEx.Configuration;
+﻿using BepInEx.Configuration;
 
-namespace TierSelector
+namespace Toasted
 {
-    internal static class Config
+    public static class Config
     {
         public enum ItemType
         {
@@ -17,10 +14,18 @@ namespace TierSelector
             Void
         }
 
-        internal static ConfigEntry<ItemType> selectedTier;
+        public static ConfigEntry<ItemType> selectedTier;
 
-        public static void Initialise()
+        public static bool IsInitialised = false;
+
+        public static void Initialise(TierSelector selector)
         {
+            if (IsInitialised)
+                return;
+
+            IsInitialised = true;
+
+            selectedTier = selector.Config.Bind("ItemSelector", "Selected Tier", ItemType.White, "Which tier you want (White = 0, Green = 1, Red = 2, Boss = 3, Lunar = 4, Void = 5.");
         }
     }
 }

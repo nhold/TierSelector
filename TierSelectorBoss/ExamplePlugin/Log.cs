@@ -1,6 +1,6 @@
 ﻿using BepInEx.Logging;
 
-namespace TierSelector
+namespace Toasted
 {
     internal static class Log
     {

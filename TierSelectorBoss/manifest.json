@@ -1,8 +1,8 @@
 ﻿{
-	"name": "MyFirstMod",
-	"version_number": "1.0.0",
-	"website_url": "",
-	"description": "My first Mod",
+	"name": "TierSelector",
+	"version_number": "2.0.0",
+	"website_url": "https://github.com/nhold/TierSelector",
+	"description": "Tier Selector - Select your tier and only those items drop.",
 	"dependencies": [
 		"bbepis-BepInExPack-5.4.9",
 		"RiskofThunder-HookGenPatcher-1.2.1"

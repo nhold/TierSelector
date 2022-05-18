@@ -2,10 +2,11 @@ using BepInEx;
 using R2API;
 using R2API.Utils;
 using RoR2;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace TierSelector
+namespace Toasted
 {
     //This is an example plugin that can be put in BepInEx/plugins/ExamplePlugin/ExamplePlugin.dll to test out.
     //It's a small plugin that adds a relatively simple item to the game, and gives you that item whenever you press F2.
@@ -29,8 +30,10 @@ namespace TierSelector
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "Vorkiblo";
         public const string PluginName = "TierSelector";
-        public const string PluginVersion = "1.2";
+        public const string PluginVersion = "1.2.0";
 
+        public List<PickupIndex> currentLootTable;
+        public CostTypeIndex currentCostType;
 
         public void Awake()
         {
@@ -40,8 +43,9 @@ namespace TierSelector
             On.RoR2.ChestBehavior.Roll += ChestBehavior_Roll;
             On.RoR2.ShrineChanceBehavior.AddShrineStack += ShrineChanceBehavior_AddShrineStack;
             On.RoR2.MultiShopController.CreateTerminals += MultiShopController_CreateTerminals;
-        }
 
+            Toasted.Config.Initialise(this);
+        }
 
         private void ShrineChanceBehavior_AddShrineStack(On.RoR2.ShrineChanceBehavior.orig_AddShrineStack orig, ShrineChanceBehavior self, Interactor activator)
         {
@@ -56,36 +60,32 @@ namespace TierSelector
             {
                 if (self.rng.nextNormalizedFloat > self.failureChance)
                 {
-                    Log.LogInfo("Found drop table.");
-                    // Copy because we dont want to change it forever.
 
                     pickupIndex = self.dropTable.GenerateDrop(self.rng);
-                    if (pickupIndex != PickupIndex.none || !Run.instance.availableTier3DropList.Contains(pickupIndex))
-                    {
-                        // force green.
-                        pickupIndex = Run.instance.availableBossDropList[UnityEngine.Random.Range(0, Run.instance.availableBossDropList.Count)];
-                    }
-                    Log.LogInfo("Oh god.");
 
+                    // Check here if it's a failure or if it's outside of our current loot table.
+                    if (pickupIndex != PickupIndex.none || !currentLootTable.Contains(pickupIndex))
+                    {
+                        // If it's outside of our loot table, we just generate from our selected one.
+                        pickupIndex = currentLootTable[UnityEngine.Random.Range(0, currentLootTable.Count)];
+                    }
                 }
             }
             else
             {
+                // Otherwise just go with the flow!
                 PickupIndex none = PickupIndex.none;
-                PickupIndex value = self.rng.NextElementUniform<PickupIndex>(Run.instance.availableTier1DropList);
-                PickupIndex value2 = self.rng.NextElementUniform<PickupIndex>(Run.instance.availableTier2DropList);
-                PickupIndex value3 = self.rng.NextElementUniform<PickupIndex>(Run.instance.availableBossDropList);
-                PickupIndex value4 = self.rng.NextElementUniform<PickupIndex>(Run.instance.availableEquipmentDropList);
+                PickupIndex selectedItem = self.rng.NextElementUniform<PickupIndex>(currentLootTable);
                 WeightedSelection<PickupIndex> weightedSelection = new WeightedSelection<PickupIndex>(8);
                 weightedSelection.AddChoice(none, self.failureWeight);
-                //weightedSelection.AddChoice(value, self.tier1Weight);
-                //weightedSelection.AddChoice(value2, self.tier2Weight);
-                weightedSelection.AddChoice(value3, self.tier3Weight);
-                //weightedSelection.AddChoice(value4, self.equipmentWeight);
+                weightedSelection.AddChoice(selectedItem, self.tier3Weight);
+
                 pickupIndex = weightedSelection.Evaluate(self.rng.nextNormalizedFloat);
             }
+
             bool flag = pickupIndex == PickupIndex.none;
             string baseToken;
+
             if (flag)
             {
                 baseToken = "SHRINE_CHANCE_FAIL_MESSAGE";
@@ -103,7 +103,7 @@ namespace TierSelector
                 baseToken = baseToken
             });
 
-            // TODO: Invoke global static.
+            // TODO: Invoke global static using reflection.
             /*var type = typeof(ShrineChanceBehavior);
             foreach(var info in type.GetField("onShrineChancePurchaseGlobal"))
 
@@ -127,62 +127,89 @@ namespace TierSelector
         private void MultiShopController_CreateTerminals(On.RoR2.MultiShopController.orig_CreateTerminals orig, MultiShopController self)
         {
             orig(self);
-            var items = FindObjectsOfType<ShopTerminalBehavior>();
-            var items2 = FindObjectsOfType<PurchaseInteraction>();
 
+
+            var items = FindObjectsOfType<ShopTerminalBehavior>();
             foreach (var item in items)
             {
                 if (item.gameObject.name.Contains("Duplicator"))
                 {
                     foreach (var components in item.gameObject.GetComponents<PurchaseInteraction>())
                     {
-                        components.costType = CostTypeIndex.BossItem;
-                        //Log.LogInfo(components.GetScriptClassName());
+                        components.costType = currentCostType;
                     }
                 }
 
                 item.selfGeneratePickup = false;
-                Log.LogInfo(item.gameObject.name);
-                item.SetPickupIndex(Run.instance.availableBossDropList[UnityEngine.Random.Range(0, Run.instance.availableBossDropList.Count)], false);
+
+                item.SetPickupIndex(currentLootTable[UnityEngine.Random.Range(0, currentLootTable.Count)], false);
             }
-            Log.LogInfo("You da bomb");
         }
 
         private void ChestBehavior_Roll(On.RoR2.ChestBehavior.orig_Roll orig, ChestBehavior self)
         {
             orig(self);
-            Log.LogInfo("WOOOOOP");
-            self.dropPickup = Run.instance.availableBossDropList[UnityEngine.Random.Range(0, Run.instance.availableBossDropList.Count)];
+
+            self.dropPickup = currentLootTable[UnityEngine.Random.Range(0, currentLootTable.Count)];
         }
 
         private void Run_BuildDropTable(On.RoR2.Run.orig_BuildDropTable orig, Run self)
         {
             orig(self);
-            Log.LogInfo("Forcing ");
+            SetupCurrentLootTables();
+
             self.smallChestDropTierSelector.Clear();
-            self.smallChestDropTierSelector.AddChoice(self.availableBossDropList, 1.0f);
+            self.smallChestDropTierSelector.AddChoice(currentLootTable, 1.0f);
 
             self.mediumChestDropTierSelector.Clear();
-            self.mediumChestDropTierSelector.AddChoice(self.availableBossDropList, 1.0f);
+            self.mediumChestDropTierSelector.AddChoice(currentLootTable, 1.0f);
 
             self.largeChestDropTierSelector.Clear();
-            self.largeChestDropTierSelector.AddChoice(self.availableBossDropList, 1.0f);
-
-
+            self.largeChestDropTierSelector.AddChoice(currentLootTable, 1.0f);
         }
 
-
-
-        //The Update() method is run on every frame of the game.
-        private void Update()
+        private void SetupCurrentLootTables()
         {
-            //This if statement checks if the player has currently pressed F2.
-            if (Input.GetKeyDown(KeyCode.F2))
-            {
-                //Get the player body to use a position:
-                var transform = PlayerCharacterMasterController.instances[0].master.GetBodyObject().transform;
+            currentLootTable = new List<PickupIndex>();
 
-                Log.LogInfo($"Player pressed F2. Spawning our custom item at coordinates {transform.position}");
+            Logger.LogInfo("Current selected tier is: " + Toasted.Config.selectedTier.Value.ToString());
+
+            if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.White)
+            {
+                currentLootTable = Run.instance.availableTier1DropList;
+                currentCostType = CostTypeIndex.WhiteItem;
+            }
+
+            if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Green)
+            {
+                currentLootTable = Run.instance.availableTier2DropList;
+                currentCostType = CostTypeIndex.GreenItem;
+            }
+
+            if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Red)
+            {
+                currentLootTable = Run.instance.availableTier3DropList;
+                currentCostType = CostTypeIndex.RedItem;
+            }
+
+            if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Boss)
+            {
+                currentLootTable = Run.instance.availableBossDropList;
+                currentCostType = CostTypeIndex.BossItem;
+            }
+
+            if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Lunar)
+            {
+                currentLootTable = Run.instance.availableLunarCombinedDropList;
+                currentCostType = CostTypeIndex.LunarItemOrEquipment;
+            }
+
+            if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Void)
+            {
+                currentLootTable = Run.instance.availableVoidTier1DropList;
+                currentLootTable.AddRange(Run.instance.availableVoidTier2DropList);
+                currentLootTable.AddRange(Run.instance.availableVoidTier3DropList);
+                currentCostType = CostTypeIndex.TreasureCacheVoidItem;
             }
         }
     }

@@ -1,0 +1,10 @@
+{
+    "name": "TierSelector",
+    "version_number": "1.2.0",
+    "website_url": "https://github.com/nhold/TierSelector",
+    "description": "Allows you to select a tier, only that tier will drop from everything.",
+    "dependencies": [
+        "bbepis-BepInExPack-5.4.1901",
+        "tristanmcpherson-R2API-4.0.11"
+    ]
+}
