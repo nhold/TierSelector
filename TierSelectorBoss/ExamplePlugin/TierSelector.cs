@@ -30,7 +30,7 @@ namespace Toasted
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "Vorkiblo";
         public const string PluginName = "TierSelector";
-        public const string PluginVersion = "1.2.0";
+        public const string PluginVersion = "1.3.0";
 
         public List<PickupIndex> currentLootTable;
         public CostTypeIndex currentCostType;
@@ -43,8 +43,64 @@ namespace Toasted
             On.RoR2.ChestBehavior.Roll += ChestBehavior_Roll;
             On.RoR2.ShrineChanceBehavior.AddShrineStack += ShrineChanceBehavior_AddShrineStack;
             On.RoR2.MultiShopController.CreateTerminals += MultiShopController_CreateTerminals;
-
+            On.RoR2.BossGroup.DropRewards += BossGroup_DropRewards;
             Toasted.Config.Initialise(this);
+        }
+
+        private void BossGroup_DropRewards(On.RoR2.BossGroup.orig_DropRewards orig, BossGroup self)
+        {
+            int participatingPlayerCount = Run.instance.participatingPlayerCount;
+            if (participatingPlayerCount != 0 && self.dropPosition)
+            {
+                PickupIndex pickupIndex = PickupIndex.none;
+                if (self.dropTable)
+                {
+                    pickupIndex = self.dropTable.GenerateDrop(self.rng);
+                }
+                else
+                {
+                    List<PickupIndex> list = Run.instance.availableTier2DropList;
+                    if (self.forceTier3Reward)
+                    {
+                        list = Run.instance.availableTier3DropList;
+                    }
+                    pickupIndex = self.rng.NextElementUniform<PickupIndex>(list);
+                }
+                int num = 1 + self.bonusRewardCount;
+                if (self.scaleRewardsByPlayerCount)
+                {
+                    num *= participatingPlayerCount;
+                }
+                float angle = 360f / (float)num;
+                Vector3 vector = Quaternion.AngleAxis((float)UnityEngine.Random.Range(0, 360), Vector3.up) * (Vector3.up * 40f + Vector3.forward * 5f);
+                Quaternion rotation = Quaternion.AngleAxis(angle, Vector3.up);
+                int i = 0;
+                while (i < num)
+                {
+                    PickupIndex pickupIndex2 = pickupIndex;
+                    if ((self.bossDrops.Count > 0 || self.bossDropTables.Count > 0) && self.rng.nextNormalizedFloat <= self.bossDropChance)
+                    {
+                        if (self.bossDropTables.Count > 0)
+                        {
+                            pickupIndex2 = self.rng.NextElementUniform<PickupDropTable>(self.bossDropTables).GenerateDrop(self.rng);
+                        }
+                        else
+                        {
+                            pickupIndex2 = self.rng.NextElementUniform<PickupIndex>(self.bossDrops);
+                        }
+                    }
+
+                    if (pickupIndex2 != PickupIndex.none || !currentLootTable.Contains(pickupIndex2))
+                    {
+                        // If it's outside of our loot table, we just generate from our selected one.
+                        pickupIndex2 = currentLootTable[UnityEngine.Random.Range(0, currentLootTable.Count)];
+                    }
+
+                    PickupDropletController.CreatePickupDroplet(pickupIndex2, self.dropPosition.position, vector);
+                    i++;
+                    vector = rotation * vector;
+                }
+            }
         }
 
         private void ShrineChanceBehavior_AddShrineStack(On.RoR2.ShrineChanceBehavior.orig_AddShrineStack orig, ShrineChanceBehavior self, Interactor activator)
@@ -194,13 +250,23 @@ namespace Toasted
 
             if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Boss)
             {
-                currentLootTable = Run.instance.availableBossDropList;
+                var newOne = ItemCatalog.FindItemIndex("Pearl");
+                var newOne2 = ItemCatalog.FindItemIndex("ShinyPearl");
+                var newOne3 = ItemCatalog.FindItemIndex("TitanGoldDuringTP");
+
+
+                currentLootTable = new List<PickupIndex>(Run.instance.availableBossDropList);
+                currentLootTable.Add(new PickupIndex(newOne));
+                currentLootTable.Add(new PickupIndex(newOne2));
+                currentLootTable.Add(new PickupIndex(newOne3));
+
                 currentCostType = CostTypeIndex.BossItem;
             }
 
             if (Toasted.Config.selectedTier.Value == Toasted.Config.ItemType.Lunar)
             {
                 currentLootTable = Run.instance.availableLunarCombinedDropList;
+                currentLootTable.AddRange(Run.instance.availableLunarEquipmentDropList);
                 currentCostType = CostTypeIndex.LunarItemOrEquipment;
             }
 

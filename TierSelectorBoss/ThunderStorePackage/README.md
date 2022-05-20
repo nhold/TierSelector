@@ -50,6 +50,7 @@ or use r2modman config editor?
 ## Changelog
 
 ```
+- 1.3.0: Add halcyon seed, pearl and shiny pearl to boss drops when boss selected! (NOT CRINGE MODE)
 - 1.2.0: Add configuration for white, green, red, boss, lunar, void tiers.
 - 1.0.3: Add back in last boss item (dunno what it was??)
 - 1.0.0: Everything spawns boss items: Equipment, Shrines, 3D printers, Chests etc.
